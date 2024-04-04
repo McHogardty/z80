@@ -4,7 +4,6 @@ This repo contains code and schematics relating to my breadboard z80 project. I'
 
 I use z88dk/z80asm for assembling the code. This will allow me to also write C code for it in the future.
 
-
 ## Components
 
 This list includes the components I've added so far. I have more that I want to add, but the wiring takes a while and I can really only do it on weekends.
