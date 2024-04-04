@@ -19,4 +19,17 @@ This list includes the components I've added so far. I have more that I want to 
 I also have the following utility components that aren't specific to this project but I still find extremely useful.
 
 * **555 timer circuit (NE555P)**. I can use this to create a manual or low-frequency clock, which is super useful for debugging, particularly at the start.
-* **3mm LEDs with built-in 5V resistors (WP710A10ID5V)**. The model number I provided is for RED LEDs, they also produce green and yellow variants.
+* **3mm LEDs with buil
+
+## Memory map
+
+For the initial build I decided that I didn't want to implement any ROM paging, so I decided to use 1/4 of the address space for ROM and the remainder for RAM.
+
+* `0x0000` to `0x1FFF`: ROM
+* `0x2000` to `0xFFFF`: RAM
+
+## IO address map
+
+I forgot to purchase a line decoder chip, so I have initally only used the Z80 PIO chip, but the intention will be that it start at address `0x00` in the IO address space.
+
+* `0x00` to `0x04`: Z80 PIO
