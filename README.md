@@ -23,7 +23,7 @@ I also have the following utility components that aren't specific to this projec
 
 ## Memory map
 
-For the initial build I decided that I didn't want to implement any ROM paging, so I decided to use 1/4 of the address space for ROM and the remainder for RAM.
+For the initial build I decided that I didn't want to implement any ROM paging, so I decided to use 1/8 of the address space for ROM and the remainder for RAM.
 
 * `0x0000` to `0x1FFF`: ROM
 * `0x2000` to `0xFFFF`: RAM
