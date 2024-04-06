@@ -6,6 +6,8 @@ The assembly code for testing only does two things - send the initialisation seq
 
 My experience with using the PIO for this task differs slightly from using the 6502 VIA. The VIA only has one mode for each port (equivalent to mode 3 for the PIO). That means that you simply need to write to the data direction register to change pins from input to output (and vice versa). For the PIO, you need to set the mode in the control register and then write the byte to set the direction of each pin. At higher clock frequencies (100 Hz or greater) this probably won't matter too much, but I was running the board at ~4 Hz for debugging and this made it fairly slow.
 
+For debugging, I used pins 2 and 3 of port A to indicate ack and nack signals. It was fairly easy to get the display to the point where it would acknowledge bytes, but it was still useful for understanding whether or not there were issues with noise or voltage leading to spurious errors.
+
 ## Lessons learned
 
 Make sure that you consult the datasheet for your specific display to check what initialisation sequence you need to send.  The display requires a fairly complicated initialisation sequence that involves sending a string of command bytes to the display. The values of these commands are highly specific to the hardware implementation by the manufactuer. After reading several different datasheets and a lot of research I was able to figure out the command sequence.
