@@ -1,8 +1,4 @@
 
-; This I2C test is for interacting with an Adafruit 938 display via the PIO.
-; At this point, no RAM was available in the system (just 8K of ROM), so I
-; had no subroutine calls or frame buffer. 
-
 
 PIO_DATA_A = $00
 PIO_DATA_B = $01
@@ -14,16 +10,8 @@ PIO_MODE_3 = $cf
 
     section code
 
-
 reset:
     ld SP, $ffff
-
-    ; Currently we don't have RAM and there isn't a way to
-    ; read the control bits out of the port so we use the D
-    ; register to manage the state. We will need the C register to
-    ; store the address of the port A control register so that we
-    ; can output directly from D.
-    ld C, PIO_CTRL_A
 
     ; Initialise port A in mode 3 (control mode).
     ld A, PIO_MODE_3
@@ -41,7 +29,7 @@ reset:
 
     ; Store the location and length of the init sequence in the index registers.
     ; Ideally we use the B register since it is made for looping, but we also need it
-    ; for sending each byte. The load instruction for index registers is always 16-bit and takes
+    ; for sending each byte. The load instruction for awindex registers is always 16-bit and takes
     ; up a fourth byte prefix each time.
     ; I should come back later and see if there are better techniques, e.g. pushing B onto
     ; the stack.
@@ -49,6 +37,10 @@ reset:
     ld L, end_display_init_sequence - display_init_sequence
 
     call i2c_transaction
+
+    ; Write out the data.
+    ld IY, bitmap_data
+    call i2c_data_transaction
 
 loop:
     jp loop
@@ -58,6 +50,7 @@ loop:
 ; Modifies: A, B, D, E, L, IY, flags
 ;
 i2c_transaction:
+    ld C, PIO_CTRL_A
     ld E, PIO_MODE_3
 i2c_start:
     res 1, D
@@ -142,6 +135,79 @@ i2c_clock_low:
     ret
 
 
+i2c_data_transaction:
+    ld C, PIO_CTRL_A
+    ld E, PIO_MODE_3
+i2c_start_data:
+    res 1, D
+    out (C), E
+    out (C), D
+    res 0, D
+    out (C), E
+    out (C), D
+
+    ld A, $7a
+    call i2c_send_byte
+    ld A, $40
+    call i2c_send_byte
+
+    ; start at IY, send 256 bytes total, four times.
+    ld L, $00
+loop_through_data_array_1:
+    ld A, (IY)
+    cpl
+    call i2c_send_byte
+
+    dec L
+    inc IY
+    jp nz, loop_through_data_array_1
+    ld L, $00
+loop_through_data_array_2:
+    ld A, (IY)
+    cpl
+    call i2c_send_byte
+
+    dec L
+    inc IY
+    jp nz, loop_through_data_array_2
+
+    ld L, $00
+loop_through_data_array_3:
+    ld A, (IY)
+    cpl
+    call i2c_send_byte
+
+    dec L
+    inc IY
+    jp nz, loop_through_data_array_3
+
+    ld L, $00
+loop_through_data_array_4:
+    ld A, (IY)
+    cpl
+    call i2c_send_byte
+
+    dec L
+    inc IY
+    jp nz, loop_through_data_array_4
+
+
+i2c_stop_data:
+    ; Bring SDA high AFTER SCL is brought high.
+    res 1, D
+    out (C), E
+    out (C), D
+    set 0, D
+    out (C), E
+    out (C), D
+    set 1, D
+    out (C), E
+    out (C), D
+
+    ret
+
+
+
     section data
 
 ; We are going to send the set of initialisation commands to get the display to run.
@@ -156,13 +222,14 @@ i2c_clock_low:
 ; 6. Set segment remap (0xA1)
 ; 7. Set COM output scan direction (0xC8)
 ; 8. Set COM pin hardware configuration (0xDA, 0x12)
-; 9. Set contrast control (0x81, 0xFF)
-; 10. Set pre-charge period (0xD9, 0x22)
-; 11. Set VCOMH deselect level (0xDB, 0x30)
-; 12. Set entire display off (0xA4)
-; 13. Set normal display (0xA6)
-; 14. Set the charge pump (0x8D, 0x14)
-; 15. Set display on (0xAF)
+; 9. Set memory addressing mode to horizontal (0x20, 0x00).
+; 10. Set contrast control (0x81, 0xFF)
+; 11. Set pre-charge period (0xD9, 0x22)
+; 12. Set VCOMH deselect level (0xDB, 0x30)
+; 13. Set entire display off (0xA4)
+; 14. Set normal display (0xA6)
+; 15. Set the charge pump (0x8D, 0x14)
+; 16. Set display on (0xAF)
 
 display_init_sequence:
     ; Start transaction
@@ -197,27 +264,93 @@ display_init_sequence:
     ; 8. Set COM pin hardware configuration (0xDA, 0x12)
     defb $da, $12
 
-    ; 9. Set contrast control (0x81, 0xFF)
+    ; 9. Set memory addressing mode to horizontal (0x20, 0x00).
+    defb $20, $00
+
+    ; 10. Set contrast control (0x81, 0xFF)
     defb $81, $ff
 
-    ; 10. Set pre-charge period (0xD9, 0x22)
+    ; 11. Set pre-charge period (0xD9, 0x22)
     defb $d9, $22
 
-    ; 11. Set VCOMH deselect level (0xDB, 0x30)
+    ; 12. Set VCOMH deselect level (0xDB, 0x30)
     defb $db, $30
 
-    ; 12. Set entire display off (0xA4)
+    ; 13. Set entire display off (0xA4)
     defb $a4
 
-    ; 13. Set normal display (0xA6)
+    ; 14. Set normal display (0xA6)
     defb $a6
 
-    ; 14. Set the charge pump (0x8D, 0x14)
+    ; 15. Set the charge pump (0x8D, 0x14)
     defb $8d, $14
     
     ; 16. Set display on (0xAF)
     defb $af
-
-    ; For testing, set the whole display on.
-    defb $a5
 end_display_init_sequence:
+bitmap_data:
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $7f, $7f
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $00, $00, $00, $00
+    defb $00, $00, $03, $0f, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $7f, $1f, $0f, $07, $03, $00, $00, $00, $00, $00
+    defb $00, $e0, $f8, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $7f, $7f, $7f
+    defb $7f, $7f, $7f, $1f, $07, $01, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    defb $00, $03, $03, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07, $07
+    defb $07, $07, $07, $1f, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $00, $00, $00, $00
+    defb $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    defb $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    defb $00, $00, $04, $0f, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $00, $00, $00, $00
+    defb $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    defb $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    defb $00, $00, $0c, $fc, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $fe, $f8, $f8, $f8
+    defb $f8, $f8, $f8, $f8, $f0, $f0, $e0, $e0, $c0, $c0, $80, $80, $00, $00, $00, $00
+    defb $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $80
+    defb $fc, $fc, $fe, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $fe, $fe, $fe, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+    defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+end_bitmap_data:
