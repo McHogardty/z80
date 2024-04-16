@@ -15,11 +15,17 @@ This list includes the components I've added so far. I have more that I want to 
 * **Adafruit 1.3" OLED display (938)**. This is a 128 x 64 monochrome display that uses I2C by default, but can be converted to using SPI by breaking some jumpers on the back of the board.
 * **Quad 2-input OR gates (74HC32)**. This is used to produce the necessary control signals for the RAM and ROM.
 * **Quad 2-input NAND gates (74HC00)**. This is used to combine the reset and M1 signals for the PIO chip because they share the same pin.
+* **Crystal oscillators (ECS-100AX-xxx)**. I have 1 MHz, 4 MHz and 8 MHz oscillators. The board runs well (as far as I can tell) at 8 MHz.
 
 I also have the following utility components that aren't specific to this project but I still find extremely useful.
 
 * **555 timer circuit (NE555P)**. I can use this to create a manual or low-frequency clock, which is super useful for debugging, particularly at the start.
-* **3mm LEDs with buil
+* **3mm LEDs with built-in resistors**. These were extremely useful in debugging what was happening on the bus, the I2C lines, output ports, etc.
+* **Lots of wire**. I use 22 AWG solid core wire. It's fairly pricey, but very reliable and can handle a fair amount of power.
+* **Jumper cables**. These are useful for testing, but I would strongly recommend NOT using them for power delivery or for reliable signals at higher clock speeds. They tend to be subpar for those purposes in my experience.
+* **100 nF capacitors**. One for each chip as a bypass capacitor to reduce noise.
+* **Various electrolytic capacitors**. These go on the power rails to help with noise reduction and also maintaining voltages when there is a significant increase in power draw. I got a set of them from Jaycar with various capacities, e.g. 330 uF, 470 uF.
+* **5 V DC adaptor with a 2.1 mm tip and a breakout adaptor**. I don't currently own a benchtop power supply, so I use one of these. Sometimes I use the Arduino power rails powered by USB, particularly if I'm using it as a logic analyser.
 
 ## Memory map
 
