@@ -1,5 +1,4 @@
 
-
 PIO_DATA_A = $00
 PIO_DATA_B = $01
 PIO_CTRL_A = $02
@@ -20,38 +19,48 @@ reset:
     ; impedence state. These will be the ones driving
     ; the I2C lines. We will use bit 0 for SCL and bit 1 for SDA.
     ld A, $03
-    ld D, A
+    ; ld D, A
     out (PIO_CTRL_A), A
 
     ; Make sure that in output mode the chip is driving the I2C bus low.
     ld A, $00
     out (PIO_DATA_A), A
 
-    ; Store the location and length of the init sequence in the index registers.
-    ; Ideally we use the B register since it is made for looping, but we also need it
-    ; for sending each byte. The load instruction for awindex registers is always 16-bit and takes
-    ; up a fourth byte prefix each time.
-    ; I should come back later and see if there are better techniques, e.g. pushing B onto
-    ; the stack.
-    ld IY, display_init_sequence
-    ld L, end_display_init_sequence - display_init_sequence
-
+    ld HL, display_init_sequence
+    ld B, (end_display_init_sequence - display_init_sequence) & $ff  ; LSB of the byte count.
+    ld D, (((end_display_init_sequence - display_init_sequence) - 1) >> 8) + 1  ; MSB of the byte count plus 1.
     call i2c_transaction
 
-    ; Write out the data.
-    ld IY, bitmap_data
-    call i2c_data_transaction
+    ld HL, zeroes
+    ld B, (end_zeroes - zeroes) & $ff  ; LSB of the byte count.
+    ld D, (((end_zeroes - zeroes) - 1) >> 8) + 1  ; MSB of the byte count plus 1.
+    call i2c_transaction
+
+    ld HL, display_on_sequence
+    ld B, (end_display_on_sequence - display_on_sequence) & $ff  ; LSB of the byte count.
+    ld D, (((end_display_on_sequence - display_on_sequence) - 1) >> 8) + 1  ; MSB of the byte count plus 1.
+    call i2c_transaction
+
+    ld HL, bitmap_data
+    ld B, (end_bitmap_data - bitmap_data) & $ff
+    ld D, (((end_bitmap_data - bitmap_data) - 1) >> 8) + 1
+    call i2c_transaction
 
 loop:
     jp loop
 
-; Transmit the sequence of bytes starting at IX. The byte length should be stored in L.
+; Transmit the sequence of bytes starting at HL. Supports a 16-bit loop for the byte length. B should
+; contain the LSB of the byte count, and D should contain the MSB + 1 of the byte count. E.g. if the byte count is
+; 27, then B should contain 0x1B and D should contain 0x01. The exception occurs if the LSB is 0, since this counts as
+; 256 for the purposes of the loop. E.g. if the byte count is 256, then B should contain 0 and D should only contain 1.
 ;
-; Modifies: A, B, D, E, L, IY, flags
+; Modifies: A. B, C, D, E, HL, flags
 ;
 i2c_transaction:
-    ld C, PIO_CTRL_A
+    exx
+    ld D, $03
     ld E, PIO_MODE_3
+    ld C, PIO_CTRL_A
 i2c_start:
     res 1, D
     out (C), E
@@ -59,16 +68,22 @@ i2c_start:
     res 0, D
     out (C), E
     out (C), D
-
+    exx
 loop_through_byte_array:
-    ld A, (IY)
+    ld A, (HL)
+    exx
     call i2c_send_byte
-
-    dec L
-    inc IY
+    exx
+    
+    ; A faster method for performing a 16-bit loop - store the LSB in B and the MSB + 1 in D.
+    ; When B hits zero, dec D and loop through B again (which nets you 256 iterations).
+    inc HL
+    djnz loop_through_byte_array
+    dec D
     jp nz, loop_through_byte_array
 
 i2c_stop:
+    exx
     ; Bring SDA high AFTER SCL is brought high.
     res 1, D
     out (C), E
@@ -79,7 +94,7 @@ i2c_stop:
     set 1, D
     out (C), E
     out (C), D
-
+    exx
     ret
 
 ; Send the byte currently stored in A. 
@@ -133,80 +148,6 @@ i2c_clock_low:
     out (C), D
 
     ret
-
-
-i2c_data_transaction:
-    ld C, PIO_CTRL_A
-    ld E, PIO_MODE_3
-i2c_start_data:
-    res 1, D
-    out (C), E
-    out (C), D
-    res 0, D
-    out (C), E
-    out (C), D
-
-    ld A, $7a
-    call i2c_send_byte
-    ld A, $40
-    call i2c_send_byte
-
-    ; start at IY, send 256 bytes total, four times.
-    ld L, $00
-loop_through_data_array_1:
-    ld A, (IY)
-    cpl
-    call i2c_send_byte
-
-    dec L
-    inc IY
-    jp nz, loop_through_data_array_1
-    ld L, $00
-loop_through_data_array_2:
-    ld A, (IY)
-    cpl
-    call i2c_send_byte
-
-    dec L
-    inc IY
-    jp nz, loop_through_data_array_2
-
-    ld L, $00
-loop_through_data_array_3:
-    ld A, (IY)
-    cpl
-    call i2c_send_byte
-
-    dec L
-    inc IY
-    jp nz, loop_through_data_array_3
-
-    ld L, $00
-loop_through_data_array_4:
-    ld A, (IY)
-    cpl
-    call i2c_send_byte
-
-    dec L
-    inc IY
-    jp nz, loop_through_data_array_4
-
-
-i2c_stop_data:
-    ; Bring SDA high AFTER SCL is brought high.
-    res 1, D
-    out (C), E
-    out (C), D
-    set 0, D
-    out (C), E
-    out (C), D
-    set 1, D
-    out (C), E
-    out (C), D
-
-    ret
-
-
 
     section data
 
@@ -284,11 +225,18 @@ display_init_sequence:
 
     ; 15. Set the charge pump (0x8D, 0x14)
     defb $8d, $14
-    
+end_display_init_sequence:
+zeroes:
+    defb $7a, $40
+    defs 16*64, $00
+end_zeroes:
+display_on_sequence:
+    defb $7a, 00
     ; 16. Set display on (0xAF)
     defb $af
-end_display_init_sequence:
+end_display_on_sequence:
 bitmap_data:
+    defb $7a, $40
     defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
     defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
     defb $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff, $ff
