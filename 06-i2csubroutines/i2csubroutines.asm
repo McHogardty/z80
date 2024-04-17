@@ -19,7 +19,6 @@ reset:
     ; impedence state. These will be the ones driving
     ; the I2C lines. We will use bit 0 for SCL and bit 1 for SDA.
     ld A, $03
-    ; ld D, A
     out (PIO_CTRL_A), A
 
     ; Make sure that in output mode the chip is driving the I2C bus low.
