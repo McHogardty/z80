@@ -45,7 +45,7 @@ For the initial build I decided that I didn't want to implement any ROM paging, 
 ## IO address map
 
 * `0x00` to `0x03`: Z80 PIO
-* `0x04` to `0x05`: Z80 CTC
+* `0x04` to `0x07`: Z80 CTC
 
 ## Schematic
 
