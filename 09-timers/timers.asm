@@ -136,7 +136,7 @@ loop:
     jp loop
 
 message:
-    defb "I got the timer circuit working, lesgo!!! :)", 0
+    defb "Hello, world! This is my hobby breadboard Z80 :)", 0
 endmessage:
 
 
