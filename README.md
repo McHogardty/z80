@@ -49,4 +49,6 @@ For the initial build I decided that I didn't want to implement any ROM paging, 
 
 ## Schematic
 
+The most up-to-date schematic is shown below and named 'schematic' in the [schematics](./schematics) folder.
+
 ![schematic](./schematics/schematic.png)
