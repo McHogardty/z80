@@ -1,2 +1,4 @@
 env
 *.o
+*.map
+*_bss.bin
